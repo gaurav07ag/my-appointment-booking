@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>My Appointment</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<style>
+:root {
+  --bg:#0a0a0f; --surface:#13131a; --surface2:#1c1c27; --border:#2a2a3d;
+  --accent:#7c6af7; --accent2:#a78bfa; --accent-glow:rgba(124,106,247,0.25);
+  --text:#f0effe; --muted:#8b8aa8; --busy:#ef4444; --free:#22c55e;
+  --busy-bg:rgba(239,68,68,0.12); --free-bg:rgba(34,197,94,0.12);
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;overflow-x:hidden;}
+body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 80% 50% at 20% 10%,rgba(124,106,247,0.12) 0%,transparent 60%),radial-gradient(ellipse 60% 40% at 80% 80%,rgba(167,139,250,0.08) 0%,transparent 60%);pointer-events:none;z-index:0;}
+.wrapper{position:relative;z-index:1;max-width:1100px;margin:0 auto;padding:40px 20px 80px;}
+
+header{text-align:center;margin-bottom:50px;}
+header .badge{display:inline-block;font-size:11px;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:var(--accent2);background:rgba(124,106,247,0.15);border:1px solid rgba(124,106,247,0.3);border-radius:100px;padding:6px 18px;margin-bottom:20px;}
+header h1{font-family:'Playfair Display',serif;font-size:clamp(36px,6vw,64px);font-weight:700;background:linear-gradient(135deg,#f0effe 0%,var(--accent2) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;line-height:1.1;margin-bottom:14px;}
+header p{color:var(--muted);font-size:16px;font-weight:300;}
+
+/* OWNER PANEL - hidden by default, shown only when ?admin=1 */
+#owner-panel{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px 24px;margin-bottom:36px;display:none;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;}
+#owner-panel.visible{display:flex;}
+.owner-label{font-size:13px;color:var(--muted);}
+.owner-label strong{color:var(--accent2);}
+#owner-status{font-size:13px;display:flex;align-items:center;gap:8px;}
+#owner-status .dot{width:8px;height:8px;border-radius:50%;background:var(--muted);display:inline-block;}
+#owner-status.connected .dot{background:var(--free);box-shadow:0 0 8px var(--free);}
+#owner-status.connected{color:var(--free);}
+
+/* Client notice */
+#client-notice{text-align:center;margin-bottom:32px;padding:14px 20px;background:rgba(124,106,247,0.08);border:1px solid rgba(124,106,247,0.2);border-radius:12px;font-size:14px;color:var(--muted);}
+#client-notice span{color:var(--accent2);font-weight:500;}
+
+/* Loading overlay */
+#loading-overlay{position:fixed;inset:0;background:var(--bg);z-index:500;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;transition:opacity 0.4s;}
+#loading-overlay.hidden{opacity:0;pointer-events:none;}
+.big-spinner{width:44px;height:44px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+.btn{display:inline-flex;align-items:center;gap:10px;padding:12px 24px;border-radius:12px;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:500;cursor:pointer;border:none;transition:all 0.2s ease;}
+.btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;box-shadow:0 4px 24px var(--accent-glow);}
+.btn-primary:hover{transform:translateY(-2px);box-shadow:0 8px 32px var(--accent-glow);}
+.btn-ghost{background:var(--surface2);color:var(--text);border:1px solid var(--border);}
+.btn-ghost:hover{border-color:var(--accent);color:var(--accent2);}
+.btn:disabled{opacity:0.4;cursor:not-allowed;transform:none!important;}
+.btn-sm{padding:8px 16px;font-size:13px;}
+
+.main-grid{display:grid;grid-template-columns:1fr 1.1fr;gap:28px;align-items:start;}
+@media(max-width:760px){.main-grid{grid-template-columns:1fr;}}
+
+.card{background:var(--surface);border:1px solid var(--border);border-radius:20px;overflow:hidden;}
+.card-header{padding:22px 24px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+.card-title{font-family:'Playfair Display',serif;font-size:18px;font-weight:600;}
+
+.cal-nav{display:flex;align-items:center;gap:12px;}
+.cal-nav-btn{width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;transition:all 0.15s;}
+.cal-nav-btn:hover{border-color:var(--accent);color:var(--accent2);}
+.calendar-body{padding:20px 16px;}
+.cal-weekdays{display:grid;grid-template-columns:repeat(7,1fr);margin-bottom:8px;}
+.cal-weekdays span{text-align:center;font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted);padding:6px 0;}
+.cal-days{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;}
+.cal-day{aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:10px;font-size:14px;cursor:pointer;transition:all 0.15s;position:relative;border:1px solid transparent;}
+.cal-day:hover:not(.empty):not(.past){background:var(--surface2);border-color:var(--border);}
+.cal-day.today{color:var(--accent2);font-weight:600;}
+.cal-day.today::after{content:'';position:absolute;bottom:4px;width:4px;height:4px;border-radius:50%;background:var(--accent2);}
+.cal-day.selected{background:var(--accent);color:#fff;border-color:var(--accent2);box-shadow:0 0 16px var(--accent-glow);}
+.cal-day.past{color:#333;cursor:default;}
+.cal-day.empty{cursor:default;}
+
+.slots-container{padding:20px;}
+.slots-date-label{font-size:13px;color:var(--muted);margin-bottom:16px;font-weight:500;}
+.slots-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;max-height:420px;overflow-y:auto;padding-right:4px;}
+.slots-grid::-webkit-scrollbar{width:4px;}
+.slots-grid::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px;}
+.slot{padding:10px 12px;border-radius:10px;border:1px solid var(--border);cursor:pointer;transition:all 0.15s;display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;}
+.slot .slot-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.slot.free{background:var(--free-bg);border-color:rgba(34,197,94,0.2);}
+.slot.free .slot-dot{background:var(--free);}
+.slot.free:hover{border-color:var(--free);transform:translateY(-1px);}
+.slot.busy{background:var(--busy-bg);border-color:rgba(239,68,68,0.2);cursor:not-allowed;opacity:0.65;}
+.slot.busy .slot-dot{background:var(--busy);}
+.slot.selected-slot{background:var(--accent);border-color:var(--accent2);color:#fff;box-shadow:0 4px 16px var(--accent-glow);}
+.slot.selected-slot .slot-dot{background:#fff;}
+.slot-time{flex:1;}
+.slot-label{font-size:10px;font-weight:400;opacity:0.7;margin-left:auto;}
+
+.no-date-msg{text-align:center;color:var(--muted);padding:60px 20px;font-size:14px;}
+.no-date-msg .icon{font-size:40px;margin-bottom:12px;opacity:0.4;}
+
+.duration-select{display:flex;gap:8px;flex-wrap:wrap;padding:16px 20px 0;}
+.duration-select span{font-size:12px;color:var(--muted);align-self:center;margin-right:4px;}
+.dur-btn{padding:6px 14px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--muted);font-size:12px;font-weight:500;cursor:pointer;transition:all 0.15s;font-family:'DM Sans',sans-serif;}
+.dur-btn.active{background:var(--accent);border-color:var(--accent2);color:#fff;}
+
+/* Not connected banner for clients */
+#not-ready-banner{background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:14px;padding:20px 24px;text-align:center;margin-bottom:32px;display:none;}
+#not-ready-banner h3{color:#ef4444;margin-bottom:6px;font-size:16px;}
+#not-ready-banner p{color:var(--muted);font-size:13px;}
+
+/* Modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(6px);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px;opacity:0;pointer-events:none;transition:opacity 0.25s;}
+.modal-overlay.open{opacity:1;pointer-events:all;}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:24px;width:100%;max-width:480px;padding:32px;transform:translateY(20px);transition:transform 0.25s;position:relative;}
+.modal-overlay.open .modal{transform:translateY(0);}
+.modal h2{font-family:'Playfair Display',serif;font-size:24px;margin-bottom:6px;}
+.modal-subtitle{font-size:13px;color:var(--muted);margin-bottom:28px;padding:10px 14px;background:var(--surface2);border-radius:10px;border:1px solid var(--border);}
+.modal-subtitle strong{color:var(--accent2);}
+.form-group{margin-bottom:18px;}
+.form-group label{display:block;font-size:12px;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;color:var(--muted);margin-bottom:8px;}
+.form-group input,.form-group textarea{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px 16px;font-family:'DM Sans',sans-serif;font-size:14px;color:var(--text);outline:none;transition:border-color 0.15s;}
+.form-group input:focus,.form-group textarea:focus{border-color:var(--accent);}
+.form-group textarea{resize:vertical;min-height:80px;}
+.modal-actions{display:flex;gap:12px;margin-top:24px;}
+.modal-actions .btn{flex:1;justify-content:center;}
+.close-btn{position:absolute;top:20px;right:20px;width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--muted);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;transition:all 0.15s;}
+.close-btn:hover{color:var(--text);border-color:var(--accent);}
+
+.toast{position:fixed;bottom:30px;right:30px;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px 20px;display:flex;align-items:center;gap:12px;font-size:14px;z-index:200;transform:translateY(20px);opacity:0;transition:all 0.3s;max-width:360px;}
+.toast.show{transform:translateY(0);opacity:1;}
+.toast.success{border-color:rgba(34,197,94,0.4);}
+.toast.error{border-color:rgba(239,68,68,0.4);}
+.toast-icon{font-size:20px;}
+
+.spinner{width:18px;height:18px;border:2px solid rgba(255,255,255,0.2);border-top-color:#fff;border-radius:50%;animation:spin 0.7s linear infinite;display:inline-block;}
+.loading-slots{text-align:center;padding:40px 20px;color:var(--muted);font-size:14px;display:flex;flex-direction:column;align-items:center;gap:12px;}
+
+/* Legend dots */
+.legend-item{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);}
+.legend-dot{width:8px;height:8px;border-radius:50%;}
+</style>
+</head>
+<body>
+
+<!-- Loading overlay -->
+<div id="loading-overlay">
+  <div class="big-spinner"></div>
+  <span style="color:var(--muted);font-size:14px;">Loading calendar…</span>
+</div>
+
+<div class="wrapper">
+  <header>
+    <div class="badge">📅 Online Booking</div>
+    <h1>My Appointment</h1>
+    <p>Choose a date, pick a slot, and you're all set.</p>
+  </header>
+
+  <!-- OWNER ADMIN PANEL (only visible at ?admin=1) -->
+  <div id="owner-panel">
+    <div>
+      <div class="owner-label">🔐 <strong>Owner Panel</strong> — Your clients won't see this</div>
+      <div id="owner-status" style="margin-top:6px;">
+        <span class="dot"></span>
+        <span id="owner-status-text">Not connected to Google Calendar</span>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <button class="btn btn-primary btn-sm" id="owner-signin-btn" onclick="ownerSignIn()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+        Connect My Calendar
+      </button>
+      <button class="btn btn-ghost btn-sm" id="owner-signout-btn" onclick="ownerSignOut()" style="display:none">Disconnect</button>
+    </div>
+  </div>
+
+  <!-- Not ready banner for clients (shown if owner hasn't connected) -->
+  <div id="not-ready-banner">
+    <h3>⚠️ Booking Unavailable</h3>
+    <p>The calendar owner hasn't connected their Google Calendar yet. Please try again later.</p>
+  </div>
+
+  <!-- Main booking UI -->
+  <div class="main-grid" id="booking-ui">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Select Date</span>
+        <div class="cal-nav">
+          <button class="cal-nav-btn" onclick="changeMonth(-1)">‹</button>
+          <span id="month-label" style="font-size:14px;font-weight:500;min-width:120px;text-align:center"></span>
+          <button class="cal-nav-btn" onclick="changeMonth(1)">›</button>
+        </div>
+      </div>
+      <div class="calendar-body">
+        <div class="cal-weekdays">
+          <span>Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span>
+        </div>
+        <div class="cal-days" id="cal-days"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Available Slots</span>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span class="legend-item"><span class="legend-dot" style="background:var(--free)"></span>Free</span>
+          <span class="legend-item"><span class="legend-dot" style="background:var(--busy)"></span>Busy</span>
+        </div>
+      </div>
+
+      <div class="slots-container">
+        <div id="slots-area">
+          <div class="no-date-msg"><div class="icon">🗓️</div><div>Select a date to view available slots</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Booking Modal -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <button class="close-btn" onclick="closeModal()">✕</button>
+    <h2>Book Appointment</h2>
+    <div class="modal-subtitle">📅 <strong id="modal-date-time">—</strong></div>
+    <div class="form-group">
+      <label>Full Name *</label>
+      <input type="text" id="booking-name" placeholder="Your full name"/>
+    </div>
+    <div class="form-group">
+      <label>Phone Number *</label>
+      <input type="tel" id="booking-phone" placeholder="+91 98765 43210"/>
+    </div>
+    <div class="form-group">
+      <label>Email Address (optional)</label>
+      <input type="email" id="booking-email" placeholder="you@example.com"/>
+    </div>
+    <div class="form-group">
+      <label>Street Address *</label>
+      <input type="text" id="booking-address" placeholder="House no, Street, City"/>
+    </div>
+    <div class="form-group">
+      <label>Notes (optional)</label>
+      <textarea id="booking-notes" placeholder="Any notes or reason for appointment…"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" id="confirm-btn" onclick="confirmBooking()">Confirm Booking</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast">
+  <span class="toast-icon" id="toast-icon">✅</span>
+  <span id="toast-msg"></span>
+</div>
+
+<script src="https://apis.google.com/js/api.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script>
+// ── CONFIG ──────────────────────────────────────────────────
+const CLIENT_ID       = '883525184277-5si0vlak6mlmoh7lka6tb83tsurs3g0a.apps.googleusercontent.com';
+const API_KEY         = 'AIzaSyBzvT34JIdk1SE7PtXtMhq9RA84CsSQdY0';
+const SCOPES          = 'https://www.googleapis.com/auth/calendar';
+const EMAILJS_SERVICE  = 'service_l74ta69';
+const EMAILJS_TEMPLATE = 'lvjovbo';
+const EMAILJS_KEY      = 'ZIVdDbXQO55Ccosx4';
+const TOKEN_STORAGE_KEY = 'owner_gtoken'; // localStorage key for owner token
+
+// ── STATE ───────────────────────────────────────────────────
+const isAdminMode = new URLSearchParams(location.search).has('admin');
+let tokenClient, gapiInited = false, gisInited = false;
+let ownerConnected = false;
+let selectedDate = null, selectedSlot = null, slotDuration = 120, busyTimes = [];
+let viewMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+
+// ── INIT ────────────────────────────────────────────────────
+emailjs.init(EMAILJS_KEY);
+
+window.addEventListener('load', () => {
+  if (isAdminMode) document.getElementById('owner-panel').classList.add('visible');
+  gapi.load('client', initGapi);
+});
+
+async function initGapi() {
+  await gapi.client.init({
+    apiKey: API_KEY,
+    discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest']
+  });
+  gapiInited = true;
+  initGIS();
+}
+
+function initGIS() {
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: CLIENT_ID,
+    scope: SCOPES,
+    callback: async (resp) => {
+      if (resp.error) { showToast('Auth failed: ' + resp.error, false); return; }
+      // Save token expiry info
+      const tokenData = { token: resp.access_token, expires: Date.now() + (resp.expires_in * 1000) };
+      localStorage.setItem(TOKEN_STORAGE_KEY, JSON.stringify(tokenData));
+      gapi.client.setToken({ access_token: resp.access_token });
+      ownerConnected = true;
+      updateOwnerUI(true);
+      showToast('✅ Calendar connected! Clients can now book slots.', true);
+      if (selectedDate) loadSlots(selectedDate);
+    }
+  });
+  gisInited = true;
+
+  // Try to restore saved token
+  tryRestoreToken();
+}
+
+function tryRestoreToken() {
+  try {
+    const saved = localStorage.getItem(TOKEN_STORAGE_KEY);
+    if (saved) {
+      const { token, expires } = JSON.parse(saved);
+      if (Date.now() < expires - 60000) {
+        gapi.client.setToken({ access_token: token });
+        ownerConnected = true;
+        updateOwnerUI(true);
+        hideLoading();
+        renderCalendar();
+        return;
+      }
+    }
+  } catch(e) {}
+  // No valid token — if admin, show panel; if client, show not-ready banner
+  hideLoading();
+  renderCalendar();
+  if (!isAdminMode) {
+    document.getElementById('not-ready-banner').style.display = 'block';
+  }
+}
+
+function hideLoading() {
+  document.getElementById('loading-overlay').classList.add('hidden');
+}
+
+function ownerSignIn() {
+  if (!gapiInited || !gisInited) { showToast('Still loading…', false); return; }
+  tokenClient.requestAccessToken({ prompt: 'consent' });
+}
+
+function ownerSignOut() {
+  const token = gapi.client.getToken();
+  if (token) { google.accounts.oauth2.revoke(token.access_token); gapi.client.setToken(''); }
+  localStorage.removeItem(TOKEN_STORAGE_KEY);
+  ownerConnected = false;
+  updateOwnerUI(false);
+  busyTimes = [];
+  if (selectedDate) renderSlots(selectedDate);
+}
+
+function updateOwnerUI(connected) {
+  const status = document.getElementById('owner-status');
+  const text   = document.getElementById('owner-status-text');
+  const signIn = document.getElementById('owner-signin-btn');
+  const signOut= document.getElementById('owner-signout-btn');
+  const banner = document.getElementById('not-ready-banner');
+
+  if (connected) {
+    status.className = 'connected';
+    text.textContent = 'Connected — clients can now see your availability';
+    signIn.style.display  = 'none';
+    signOut.style.display = 'inline-flex';
+    banner.style.display  = 'none';
+  } else {
+    status.className = '';
+    text.textContent = 'Not connected to Google Calendar';
+    signIn.style.display  = 'inline-flex';
+    signOut.style.display = 'none';
+    if (!isAdminMode) banner.style.display = 'block';
+  }
+}
+
+// ── CALENDAR ────────────────────────────────────────────────
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+function renderCalendar() {
+  document.getElementById('month-label').textContent = MONTHS[viewMonth.getMonth()] + ' ' + viewMonth.getFullYear();
+  const container = document.getElementById('cal-days');
+  container.innerHTML = '';
+  const firstDay = new Date(viewMonth.getFullYear(), viewMonth.getMonth(), 1).getDay();
+  const daysInMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth()+1, 0).getDate();
+  const today = new Date();
+
+  for (let i = 0; i < firstDay; i++) {
+    const e = document.createElement('div'); e.className='cal-day empty'; container.appendChild(e);
+  }
+  for (let d = 1; d <= daysInMonth; d++) {
+    const el = document.createElement('div');
+    el.className = 'cal-day';
+    el.textContent = d;
+    const thisDate = new Date(viewMonth.getFullYear(), viewMonth.getMonth(), d);
+    const isPast   = thisDate < new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const isToday  = thisDate.toDateString() === today.toDateString();
+    const isSel    = selectedDate && thisDate.toDateString() === selectedDate.toDateString();
+    const isSunday = thisDate.getDay() === 0;
+    if (isPast || isSunday) el.classList.add('past');
+    if (isToday) el.classList.add('today');
+    if (isSel)   el.classList.add('selected');
+    if (isSunday) el.title = 'Closed on Sundays';
+    if (!isPast && !isSunday) el.addEventListener('click', () => selectDate(thisDate));
+    container.appendChild(el);
+  }
+}
+
+function changeMonth(dir) {
+  viewMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth()+dir, 1);
+  renderCalendar();
+}
+
+function selectDate(date) {
+  selectedDate = date; selectedSlot = null;
+  renderCalendar();
+  loadSlots(date);
+}
+
+function setDuration(mins, btn) {
+  slotDuration = mins;
+  document.querySelectorAll('.dur-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  if (selectedDate) loadSlots(selectedDate);
+}
+
+// ── SLOTS ───────────────────────────────────────────────────
+async function loadSlots(date) {
+  const area = document.getElementById('slots-area');
+  area.innerHTML = '<div class="loading-slots"><div class="spinner"></div><span>Fetching availability…</span></div>';
+
+  if (ownerConnected) {
+    try {
+      const start = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0).toISOString();
+      const end   = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59).toISOString();
+      const resp  = await gapi.client.calendar.freebusy.query({
+        resource: { timeMin: start, timeMax: end, items: [{ id: 'primary' }] }
+      });
+      busyTimes = resp.result.calendars.primary.busy || [];
+    } catch(e) {
+      // Token may have expired — clear it
+      if (e.status === 401) {
+        localStorage.removeItem(TOKEN_STORAGE_KEY);
+        ownerConnected = false;
+        updateOwnerUI(false);
+      }
+      busyTimes = [];
+    }
+  } else {
+    busyTimes = [];
+  }
+  renderSlots(date);
+}
+
+function renderSlots(date) {
+  const area  = document.getElementById('slots-area');
+  const slots = generateSlots(date);
+  if (!slots.length) {
+    const isSunday = date.getDay() === 0;
+    const msg = isSunday ? '🚫 Closed on Sundays' : '🕐 No slots available for this date';
+    area.innerHTML = `<div class="no-date-msg"><div class="icon">${isSunday ? '🚫' : '🕐'}</div><div>${isSunday ? 'We are closed on Sundays' : 'No slots available for this date'}</div></div>`;
+    return;
+  }
+  const label = fmtDate(date);
+  let html = `<div class="slots-date-label">📅 ${label}</div><div class="slots-grid">`;
+  slots.forEach((slot, i) => {
+    const cls   = slot.busy ? 'busy' : (selectedSlot && selectedSlot.start === slot.start ? 'selected-slot' : 'free');
+    const lbl   = slot.busy ? 'Busy' : 'Available';
+    const click = slot.busy ? '' : `onclick="selectSlot(${i})"`;
+    html += `<div class="slot ${cls}" ${click}><span class="slot-dot"></span><span class="slot-time">${slot.label}</span><span class="slot-label">${lbl}</span></div>`;
+  });
+  html += '</div>';
+  area.innerHTML = html;
+  area._slots = slots;
+}
+
+function generateSlots(date) {
+  const slots = []; const now = new Date();
+  const isToday = date.toDateString() === now.toDateString();
+  const dayOfWeek = date.getDay(); // 0=Sun, 6=Sat
+  // Only Mon–Sat (1–6), 8AM–8PM
+  if (dayOfWeek === 0) return slots; // Sunday closed
+  const START_HOUR = 8;   // 8 AM
+  const END_HOUR   = 20;  // 8 PM
+  for (let h = START_HOUR; h < END_HOUR; h += slotDuration / 60) {
+    const s = new Date(date.getFullYear(), date.getMonth(), date.getDate(), h, 0);
+    const e = new Date(s.getTime() + slotDuration * 60000);
+    if (e.getHours() > END_HOUR || (e.getHours() === END_HOUR && e.getMinutes() > 0)) continue;
+    if (isToday && s <= now) continue;
+    const busy = busyTimes.some(b => s < new Date(b.end) && e > new Date(b.start));
+    const fmt  = (h,mn) => `${h%12||12}:${mn.toString().padStart(2,'0')} ${h<12?'AM':'PM'}`;
+    const label= `${fmt(s.getHours(),s.getMinutes())} – ${fmt(e.getHours()%24,e.getMinutes())}`;
+    slots.push({ start: s.toISOString(), end: e.toISOString(), label, busy });
+  }
+  return slots;
+}
+
+function selectSlot(idx) {
+  const slots = document.getElementById('slots-area')._slots;
+  if (!slots) return;
+  selectedSlot = slots[idx];
+  renderSlots(selectedDate);
+  openModal();
+}
+
+// ── MODAL ───────────────────────────────────────────────────
+function openModal() {
+  document.getElementById('modal-date-time').textContent = fmtDate(selectedDate) + ' · ' + selectedSlot.label;
+  document.getElementById('modal').classList.add('open');
+}
+function closeModal() { document.getElementById('modal').classList.remove('open'); }
+
+async function confirmBooking() {
+  const name    = document.getElementById('booking-name').value.trim();
+  const phone   = document.getElementById('booking-phone').value.trim();
+  const email   = document.getElementById('booking-email').value.trim();
+  const address = document.getElementById('booking-address').value.trim();
+  const notes   = document.getElementById('booking-notes').value.trim();
+  if (!name)    { showToast('Please enter your name.', false); return; }
+  if (!phone)   { showToast('Please enter your phone number.', false); return; }
+  if (!address) { showToast('Please enter your street address.', false); return; }
+  if (email && !email.includes('@')) { showToast('Please enter a valid email address.', false); return; }
+
+  const btn = document.getElementById('confirm-btn');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Booking…';
+
+  const booked = selectedSlot;
+  const bookingId = 'APT-' + Date.now().toString(36).toUpperCase();
+
+  // 1. Add to owner's Google Calendar
+  try {
+    if (ownerConnected) {
+      await gapi.client.calendar.events.insert({
+        calendarId: 'primary',
+        resource: {
+          summary: `Appointment: ${name}`,
+          description: `Booked via My Appointment\nPhone: ${phone}\nAddress: ${address}\nEmail: ${email||'N/A'}\nNotes: ${notes||'N/A'}`,
+          start: { dateTime: booked.start },
+          end:   { dateTime: booked.end },
+          attendees: [{ email }],
+          reminders: { useDefault: false, overrides: [{ method:'email', minutes:60 },{ method:'popup', minutes:30 }] }
+        }
+      });
+    }
+    busyTimes.push({ start: booked.start, end: booked.end });
+  } catch(err) {
+    console.error('Calendar error:', err);
+    showToast('Calendar error. Please try again.', false);
+    btn.disabled = false; btn.innerHTML = 'Confirm Booking'; return;
+  }
+
+  // 2. Send confirmation email
+  try {
+    await emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE, {
+      to_name: name, to_email: email||'N/A',
+      date_time: fmtDate(selectedDate) + ' · ' + booked.label,
+      phone: phone, address: address, notes: notes||'N/A', booking_id: bookingId
+    });
+    closeModal();
+    showToast('🎉 Booked! Confirmation sent to ' + email, true);
+  } catch(emailErr) {
+    console.error('Email error:', emailErr);
+    closeModal();
+    showToast('✅ Appointment booked! (Email delivery failed)', true);
+  }
+
+  ['booking-name','booking-phone','booking-email','booking-address','booking-notes'].forEach(id => document.getElementById(id).value='');
+  selectedSlot = null;
+  renderSlots(selectedDate);
+  setTimeout(() => loadSlots(selectedDate), 2500);
+  btn.disabled = false; btn.innerHTML = 'Confirm Booking';
+}
+
+// ── HELPERS ─────────────────────────────────────────────────
+function fmtDate(date) {
+  return date.toLocaleDateString('en-IN', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+}
+function showToast(msg, success) {
+  const t = document.getElementById('toast');
+  document.getElementById('toast-msg').textContent = msg;
+  document.getElementById('toast-icon').textContent = success ? '✅' : '❌';
+  t.className = 'toast show ' + (success ? 'success' : 'error');
+  setTimeout(() => t.className = 'toast', 5000);
+}
+
+renderCalendar();
+</script>
+</body>
+</html>
